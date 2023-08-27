@@ -32,7 +32,9 @@ static void error_callback(int error, const char* description)
 
 bool data_handler(const mqtt::message& msg)
 {
-    std::cout<< msg.to_string()<<std::endl;
+    const auto now {std::chrono::system_clock::now()};
+    const auto t_c = std::chrono::system_clock::to_time_t(now);
+    std::cout<<std::ctime(&t_c)<<": "<<msg.to_string()<<std::endl;
     return true;
 }
 
