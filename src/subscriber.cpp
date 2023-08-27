@@ -14,9 +14,9 @@
 #include "mqtt/topic.h"
 
 
-std::mutex mx;
-std::condition_variable cv;
-bool ready;
+static std::mutex mx;
+static std::condition_variable cv;
+static bool ready;
 
 using namespace std::chrono_literals;
 
