@@ -5,13 +5,18 @@
 #include <vector>
 #include <cstdlib>
 #include <future>
+#include <mutex>
+#include <condition_variable>
 #include <glad/glad.h>
 #include <GLFW/glfw3.h>
+#include <glm/glm.hpp>
 #include "mqtt/client.h"
 #include "mqtt/topic.h"
 
 
-
+static std::mutex mx;
+static std::condition_variable cv;
+static bool ready;
 
 using namespace std::chrono_literals;
 
@@ -27,7 +32,9 @@ static void error_callback(int error, const char* description)
 
 bool data_handler(const mqtt::message& msg)
 {
-    std::cout<< msg.to_string()<<std::endl;
+    const auto now {std::chrono::system_clock::now()};
+    const auto t_c = std::chrono::system_clock::to_time_t(now);
+    std::cout<<std::ctime(&t_c)<<": "<<msg.to_string()<<std::endl;
     return true;
 }
 
@@ -46,72 +53,10 @@ void processInput(GLFWwindow *window)
     }
 }
 
-void listen()
-{
 
-}
 
-void setupMQTT()
-{
-
-    std::cout<<"MQTT Subscriber Client connecting to the MQTT server!!!\n";
-    mqtt::client cli(SERVER_ADDRESS, CLIENT_ID, 
-        mqtt::create_options(MQTTVERSION_5));
-
-    auto connOpts = mqtt::connect_options_builder()
-        .keep_alive_interval(20s)
-        .automatic_reconnect(2s, 30s)
-        .clean_session(false)
-        .finalize();
-
-    mqtt::connect_response rsp {cli.connect(connOpts)};
-        
-    if(!rsp.is_session_present()){
-        std::cout<<"Subscribing to topics\n";
-            
-        cli.subscribe(TOPIC_NAME, QOS);
-        std::cout<<"OK\n";
-    }
-    else
-    {
-        std::cout<<"Session already present\n";
-    }
-
-    try
-    {        
-        while(true)
-        {
-            auto msg = cli.consume_message();
-            if(msg)            
-            {           
-                
-                if(!data_handler(*msg))
-                {
-                    break;
-                }
-                
-            }
-            else if(!cli.is_connected()){
-                std::cout<<"Lost connection\n";
-                while(!cli.is_connected())
-                {
-                    std::this_thread::sleep_for(250ms);
-                }
-                std::cout<<"Re-established connection\n";
-            }
-        }
-
-        // disconnect the connection 
-        std::cout<<"Disconnection from the MQTT server...\n";
-        cli.disconnect();
-        std::cout<<"Connection closed!!!\n";
-    }
-    catch(const mqtt::exception& e)
-    {
-        std::cerr << e.what() << '\n';
-        std::exit(EXIT_FAILURE);
-    }
-}
+bool setupMQTT(mqtt::client& cli);
+bool listen(mqtt::client& cli);
 
 
 bool setVertexShader(uint& vertex_shader)
@@ -172,7 +117,17 @@ bool setFragmentShader(uint& fragment_shader)
 
 int main(int argc, char** argv)
 {
- 
+    //create mqtt client object
+    mqtt::client cli(SERVER_ADDRESS, CLIENT_ID, 
+                    mqtt::create_options(MQTTVERSION_5));
+
+    //declare a future object related to MQTT communication
+    std::future<bool> mqtt_receiver_listen{std::async(std::launch::async, 
+                    listen, std::ref(cli))};
+    std::future<bool> mqtt_receiver_setup{std::async(std::launch::async,
+                    setupMQTT, std::ref(cli))};
+
+    
 
     GLFWwindow *window;  
     uint vertex_shader;
@@ -180,9 +135,7 @@ int main(int argc, char** argv)
     uint shader_program;
     uint VBO; //vertex buffer object  
     uint VAO; //vertex array object 
-    //declare a future object related to MQTT communication
-    std::future<void> async_thr_mqtt_receiver{std::async(std::launch::async,
-                    setupMQTT)};
+    
 
     glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 4);
     glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 4);
@@ -264,12 +217,18 @@ int main(int argc, char** argv)
     //we have to specify how OpenGL should interpret vertex data
     glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3*sizeof(float), (void*)0);    
 
-    
+    std::future_status setup_status_;
+    bool listener_result;
     //render loop
     while (!glfwWindowShouldClose(window))
     {
         //check the input key at each iteration
         processInput(window);
+        //check asynchronous mqtt communication
+        setup_status_ = mqtt_receiver_setup.wait_for(1ms);
+        if(setup_status_==std::future_status::ready){
+        }
+        setup_status_ = mqtt_receiver_listen.wait_for(1ms);
         //rendering commands 
         //at each frame cycle, we need to clear the screen otherwise old colors
         //from old frame will still hold on the viewport
@@ -277,11 +236,11 @@ int main(int argc, char** argv)
         //we specify which buffer we would like to clear
         glClear(GL_COLOR_BUFFER_BIT);
         //now we are activating newly created program object 
+        
         glUseProgram(shader_program); 
         glBindVertexArray(VAO);
-        glDrawArrays(GL_TRIANGLES, 0, 3);     
+        glDrawArrays(GL_TRIANGLES, 0, 3);         
         
-           
         //rendering is shown on the display
         glfwSwapBuffers(window);
         glfwPollEvents();
@@ -294,4 +253,78 @@ int main(int argc, char** argv)
     glfwTerminate();
     return 0;
 
+}
+
+
+bool setupMQTT(mqtt::client& cli)
+{
+    std::unique_lock<std::mutex> lc_{mx};
+
+    std::cout<<"MQTT Subscriber Client connecting to the MQTT server!!!\n";
+
+    auto connOpts = mqtt::connect_options_builder()
+        .keep_alive_interval(20s)
+        .automatic_reconnect(2s, 30s)
+        .clean_session(false)
+        .finalize();
+
+    mqtt::connect_response rsp {cli.connect(connOpts)};
+        
+    if(!rsp.is_session_present()){
+        std::cout<<"Subscribing to topics\n";
+            
+        cli.subscribe(TOPIC_NAME, QOS);
+        std::cout<<"OK\n";
+    }
+    else
+    {
+        std::cout<<"Session already established!!!\n";
+    }
+    lc_.unlock();   
+    cv.notify_one();
+    ready = true;          
+    return true;
+}
+
+bool listen(mqtt::client& cli)
+{
+    try
+    {   
+        std::cout<<"MQTT Listener started running\n"<<std::endl;  
+        while(true)
+        {
+            std::unique_lock<std::mutex> lc_{mx};          
+            cv.wait(lc_, [&](){return ready;});
+            auto msg = cli.consume_message();
+            if(msg)            
+            {           
+                
+                if(!data_handler(*msg))
+                {
+                    break;
+                }
+                
+            }
+            else if(!cli.is_connected()){
+                std::cout<<"Lost connection\n";
+                while(!cli.is_connected())
+                {
+                    std::this_thread::sleep_for(250ms);
+                }
+                std::cout<<"Re-established connection\n";
+            }
+            lc_.unlock();
+        }
+
+        // disconnect the connection 
+        std::cout<<"Disconnection from the MQTT server...\n";
+        cli.disconnect();
+        std::cout<<"Connection closed!!!\n";
+    }
+    catch(const mqtt::exception& e)
+    {
+        std::cerr << e.what() << '\n';
+        std::exit(EXIT_FAILURE);
+    }
+    return true;
 }
