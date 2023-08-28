@@ -1,7 +1,10 @@
 cmake_minimum_required(VERSION 3.10)
 project(sensor VERSION 0.1.0 LANGUAGES C CXX)
 
+set(CMAKE_CXX_STANDARD 20)
+set(CMAKE_CXX_STANDARD_REQUIRED TRUE)
 set(OpenGL_GL_PREFERENCE GLVND)
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 find_package(Threads REQUIRED)
 find_package(Boost 1.82.0 REQUIRED)
@@ -21,9 +24,11 @@ message(STATUS "GLFW found")
 add_library(glad STATIC src/glad.c)
 target_include_directories(glad PUBLIC include)
 
+
+
 set(OpenCV_INCLUDE_DIR {OpenCV_INCLUDE_DIRS/opencv2})
 
-add_executable(${PROJECT_NAME}_mqtt_subscriber src/subscriber.cpp)
+add_executable(${PROJECT_NAME}_mqtt_subscriber src/subscriber.cpp src/shader.cpp)
 target_include_directories(${PROJECT_NAME}_mqtt_subscriber PRIVATE 
     include 
     ${PahoMqttCpp_INCLUDE_DIRS}
