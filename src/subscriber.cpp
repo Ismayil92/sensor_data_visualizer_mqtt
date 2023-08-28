@@ -32,10 +32,6 @@ const std::string SHADER_PATHS[2]{
 
 const int QOS{0};
 
-static void error_callback(int error, const char* description)
-{
-    std::cout<<description<<std::endl;
-}
 
 bool data_handler(const mqtt::message& msg)
 {
@@ -43,19 +39,6 @@ bool data_handler(const mqtt::message& msg)
     const auto t_c = std::chrono::system_clock::to_time_t(now);
     std::cout<<std::ctime(&t_c)<<": "<<msg.to_string()<<std::endl;
     return true;
-}
-
-
-
-
-void processInput(GLFWwindow *window)
-{
-    if(glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS)
-    {
-        glfwSetWindowShouldClose(window, true);
-        std::cout<<"Exit button pressed!!!\n";
-        std::exit(EXIT_SUCCESS);
-    }
 }
 
 
@@ -154,7 +137,7 @@ int main(int argc, char** argv)
     while (!glfwWindowShouldClose(window))
     {
         //check the input key at each iteration
-        processInput(window);
+        frame.processInput(window);
         //check asynchronous mqtt communication
         setup_status_ = mqtt_receiver_setup.wait_for(1ms);
         if(setup_status_==std::future_status::ready){

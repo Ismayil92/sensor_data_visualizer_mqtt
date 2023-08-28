@@ -16,7 +16,9 @@ namespace gl{
             void setViewPort();
             static void framebuffer_size_callback(GLFWwindow* window, int width, int height);
             static void error_callback(int error, const char* description);
+            static void processInput(GLFWwindow *window);
             GLFWwindow* get() const {return window;} 
+
 
         private:
             uint height;

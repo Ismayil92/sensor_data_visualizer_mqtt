@@ -77,3 +77,13 @@ void Window::error_callback(int error, const char* description)
 {
     std::cout<<description<<std::endl;
 }
+
+void Window::processInput(GLFWwindow *window)
+{
+    if(glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS)
+    {
+        glfwSetWindowShouldClose(window, true);
+        std::cout<<"Exit button pressed!!!\n";
+        std::exit(EXIT_SUCCESS);
+    }
+}
