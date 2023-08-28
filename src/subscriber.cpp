@@ -12,7 +12,7 @@
 #include <glm/glm.hpp>
 #include "mqtt/client.h"
 #include "mqtt/topic.h"
-
+#include "shader.hpp"
 
 static std::mutex mx;
 static std::condition_variable cv;
@@ -23,6 +23,12 @@ using namespace std::chrono_literals;
 const std::string SERVER_ADDRESS{"tcp://localhost:1883"};
 const std::string CLIENT_ID{"sensor_listener"};
 const std::string TOPIC_NAME{"coords"};
+
+const std::string SHADER_PATHS[2]{
+                                    "../shaders/vertex.txt", //vertex shader
+                                    "../shaders/fragment.txt" //fragment shader
+                                };
+
 const int QOS{0};
 
 static void error_callback(int error, const char* description)
@@ -37,6 +43,7 @@ bool data_handler(const mqtt::message& msg)
     std::cout<<std::ctime(&t_c)<<": "<<msg.to_string()<<std::endl;
     return true;
 }
+
 
 void framebuffer_size_callback(GLFWwindow* window, int width, int height)
 {
@@ -54,66 +61,9 @@ void processInput(GLFWwindow *window)
 }
 
 
-
 bool setupMQTT(mqtt::client& cli);
 bool listen(mqtt::client& cli);
 
-
-bool setVertexShader(uint& vertex_shader)
-{
-    int success;
-    char infoLog[512];
-    const char* vertexShaderSource = "#version 460 core\n"
-    "layout(location=0) in vec3 aPos;\n"
-    "void main()\n"
-    "{\n"
-    "    gl_Position = vec4(aPos.x, aPos.y, aPos.z, 1.0);\n"
-    "}\0";
-
-    vertex_shader = glCreateShader(GL_VERTEX_SHADER);
-    glShaderSource(vertex_shader,1,&vertexShaderSource, NULL);
-    //shader source code must compile dynamically in run-time
-    glCompileShader(vertex_shader);
-    glGetShaderiv(vertex_shader, GL_COMPILE_STATUS, &success);
-    if(!success)
-    {
-        glGetShaderInfoLog(vertex_shader, 512, NULL, infoLog);
-        std::cout<<"ERROR::SHADER::VERTEX::COMPILATION_FAILED\n"<<infoLog<<std::endl;
-        return false;
-    }
-    else
-    {
-        return true;
-    }
-}
-
-
-bool setFragmentShader(uint& fragment_shader)
-{
-    int success;
-    char infoLog[512];
-    const char* fragmentShaderSource = "#version 330 core\n"
-                                "out vec4 FragColor;\n"
-                                "void main()\n"
-                                "{\n"
-                                "FragColor = vec4(1.0f, 0.5f, 0.2f, 1.0f);\n"
-                                "}\0";
-
-    fragment_shader = glCreateShader(GL_FRAGMENT_SHADER);
-    glShaderSource(fragment_shader, 1, &fragmentShaderSource, NULL);
-    glCompileShader(fragment_shader);
-    glGetShaderiv(fragment_shader, GL_COMPILE_STATUS, &success);
-    if(!success)
-    {
-        glGetShaderInfoLog(fragment_shader, 512, NULL, infoLog);
-        std::cout<<"ERROR::SHADER::FRAGMENT::COMPILATION_FAILED\n"<<infoLog<<std::endl;
-        return false;
-    }
-    else
-    {
-        return true;
-    }
-}
 
 int main(int argc, char** argv)
 {
@@ -130,11 +80,11 @@ int main(int argc, char** argv)
     
 
     GLFWwindow *window;  
-    uint vertex_shader;
-    uint fragment_shader;
     uint shader_program;
     uint VBO; //vertex buffer object  
     uint VAO; //vertex array object 
+    uint EBO; //element buffer object
+    
     
 
     glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 4);
@@ -147,10 +97,8 @@ int main(int argc, char** argv)
         std::cerr<<"GLFW failed to initialize!!!\n";
         return -1;
     }
-    else
-    {
-        std::cout<<"GL initialized successfully!!!\n";
-    }  
+    
+    std::cout<<"GL initialized successfully!!!\n";
    
     glfwSetErrorCallback(error_callback);
     
@@ -177,16 +125,18 @@ int main(int argc, char** argv)
     glViewport(0,0, 640, 800);
     //mount callback function to the event of window resize
     glfwSetFramebufferSizeCallback(window, framebuffer_size_callback);    
-    glfwSwapInterval(1);
-
-    //configure and compile shaders
-    //in modern OpenGL we are required to define at least  a custom  vertex and fragment shader.
-    bool ver_shader_res{setVertexShader(vertex_shader)};
-    bool frag_shader_res{setFragmentShader(fragment_shader)};
+    glfwSwapInterval(1);    
+    
+    //create Vertex and Fragment shader objects
+    VertexShader vertex_shader{SHADER_PATHS[0]};
+    FragmentShader fragment_shader{SHADER_PATHS[1]};
+    //compile dynamically both shaders
+    vertex_shader.compile();
+    fragment_shader.compile();
     //create a shader program object 
     shader_program = glCreateProgram();
-    glAttachShader(shader_program, vertex_shader);
-    glAttachShader(shader_program, fragment_shader);
+    glAttachShader(shader_program, vertex_shader.get());
+    glAttachShader(shader_program, fragment_shader.get());
     glLinkProgram(shader_program);
     int shader_program_success;
     char infoLog[512];
@@ -199,23 +149,45 @@ int main(int argc, char** argv)
     }   
 
     float vertices[] = {
-            -0.5f, -0.5f, 0.0f,
-            0.5f, -0.5f, 0.0f,
-            0.0f,  0.5f, 0.0f
-        }; 
-    
+        //positions             //colors
+        0.5f,  0.5f, 0.0f,      1.0f, 0.0f, 0.0f, // top right
+        0.5f, -0.5f, 0.0f,      0.0f, 1.0f, 0.0f, // bottom right
+        -0.5f, -0.5f, 0.0f,     0.0f, 0.0f, 1.0f,  // bottom left
+        -0.5f,  0.5f, 0.0f,     1.0f, 0.0f, 1.1f  // top left 
+    }; 
+    uint indices[] = {
+        0, 1, 3, //first triangle 
+        1, 2, 3  //second triangle
+    };
 
-    
-    //generate VAO object 
+
+    //generate VAO object and bind it first of all
     glGenVertexArrays(1, &VAO);
     glBindVertexArray(VAO);
-    glEnableVertexAttribArray(0);
+   
+    //create element buffer object EBO
+    glGenBuffers(1, &EBO);
     glGenBuffers(1, &VBO);
+    //then bind and set EBO and VBOs
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, EBO);
+    glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(indices), indices, GL_STATIC_DRAW);
+    
     glBindBuffer(GL_ARRAY_BUFFER, VBO);
-    //save vertices in gpu memory
-    glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), vertices, GL_STATIC_DRAW); 
-    //we have to specify how OpenGL should interpret vertex data
-    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3*sizeof(float), (void*)0);    
+    glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), vertices, GL_STATIC_DRAW);
+    //we have to specify how OpenGL should interpret vertex data.
+    //it stores vertex data attributes including vertex buffer array in VAO object currently bound.
+    //describe how an element as a vertice should seem
+    //position attribute
+    glVertexAttribPointer(0,3,GL_FLOAT,GL_FALSE,6*sizeof(float),(void*)0);    
+    glEnableVertexAttribArray(0); //enable vertex position attribute array- arg is an attribute index
+    //color attribute
+    glVertexAttribPointer(1,3,GL_FLOAT,GL_FALSE,6*sizeof(float),(void*)(3*sizeof(float))); //last arg is an offset
+    glEnableVertexAttribArray(1); //enable vertex position attribute array- arg is an attribute index
+    //offset above become 3*sizeof(float) because for each vertice, first 3 elements are position values. 
+    //so color values starts from 4th element for each vertice.  
+
+    glBindBuffer(GL_ARRAY_BUFFER, 0); //unbind VBO after glVertexAttribPointer function.
+    
 
     std::future_status setup_status_;
     bool listener_result;
@@ -235,21 +207,22 @@ int main(int argc, char** argv)
         glClearColor(0.2f, 0.3f, 0.3f, 1.0f);
         //we specify which buffer we would like to clear
         glClear(GL_COLOR_BUFFER_BIT);
+        //find uniform object location in shader_program
+        int vertexColorLocation = glGetUniformLocation(shader_program, "inputcolor");
         //now we are activating newly created program object 
-        
         glUseProgram(shader_program); 
         glBindVertexArray(VAO);
-        glDrawArrays(GL_TRIANGLES, 0, 3);         
+        glUniform4f(vertexColorLocation, 0.0f, 1.0f, 0.5f, 1.0f);
+        glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);  //take indices into a consideration here. because you have saved indices as EBO.        
         
         //rendering is shown on the display
         glfwSwapBuffers(window);
         glfwPollEvents();
     }
        
-    //now we can delete shader objects after linking them to program object
-    glDeleteShader(vertex_shader);
-    glDeleteShader(fragment_shader);
+    //now we can delete shader program after linking them to program object    
     glDeleteVertexArrays(1, &VAO);
+    glDeleteProgram(shader_program);
     glfwTerminate();
     return 0;
 
@@ -283,7 +256,7 @@ bool setupMQTT(mqtt::client& cli)
     lc_.unlock();   
     cv.notify_one();
     ready = true;          
-    return true;
+    return ready;
 }
 
 bool listen(mqtt::client& cli)
