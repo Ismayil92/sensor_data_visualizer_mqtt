@@ -28,7 +28,7 @@ target_include_directories(glad PUBLIC include)
 
 set(OpenCV_INCLUDE_DIR {OpenCV_INCLUDE_DIRS/opencv2})
 
-add_executable(${PROJECT_NAME}_mqtt_subscriber src/subscriber.cpp src/shader.cpp)
+add_executable(${PROJECT_NAME}_mqtt_subscriber src/subscriber.cpp src/shader.cpp src/window.cpp)
 target_include_directories(${PROJECT_NAME}_mqtt_subscriber PRIVATE 
     include 
     ${PahoMqttCpp_INCLUDE_DIRS}

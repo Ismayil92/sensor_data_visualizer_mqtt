@@ -13,6 +13,7 @@
 #include "mqtt/client.h"
 #include "mqtt/topic.h"
 #include "shader.hpp"
+#include "window.hpp"
 
 static std::mutex mx;
 static std::condition_variable cv;
@@ -45,10 +46,7 @@ bool data_handler(const mqtt::message& msg)
 }
 
 
-void framebuffer_size_callback(GLFWwindow* window, int width, int height)
-{
-    glViewport(0,0, width, height);
-}
+
 
 void processInput(GLFWwindow *window)
 {
@@ -79,53 +77,13 @@ int main(int argc, char** argv)
 
     
 
-    GLFWwindow *window;  
+    GLFWwindow* window;  
     uint shader_program;
     uint VBO; //vertex buffer object  
     uint VAO; //vertex array object 
     uint EBO; //element buffer object
     
-    
-
-    glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 4);
-    glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 4);
-    glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
-
-    // initialize GLFW
-    if (!glfwInit())
-    {
-        std::cerr<<"GLFW failed to initialize!!!\n";
-        return -1;
-    }
-    
-    std::cout<<"GL initialized successfully!!!\n";
-   
-    glfwSetErrorCallback(error_callback);
-    
-    window = glfwCreateWindow(640,480, "Coordinate axes", NULL, NULL);
-    if(!window)
-    {
-        std::cerr<<"Window or OpenGL context creation failed\n";
-        glfwTerminate();
-        std::exit(EXIT_FAILURE);
-    }
-    
-    //create context of the rendering window in the main thread
-    glfwMakeContextCurrent(window);
-    //load all HW and system specific GL functions
-    if(!gladLoadGLLoader((GLADloadproc)glfwGetProcAddress))
-    {
-        std::cerr<<"Failed to initialize GLAD\n";
-        std::exit(EXIT_FAILURE);
-    }
-
-    //tell OpenGL the size of the rendering window,
-    //so OpenGL knows how we want to display the data and coordinates
-    //wrt the window. 
-    glViewport(0,0, 640, 800);
-    //mount callback function to the event of window resize
-    glfwSetFramebufferSizeCallback(window, framebuffer_size_callback);    
-    glfwSwapInterval(1);    
+    gl::Window frame{window, 480, 640, "subscriber_window"};
     
     //create Vertex and Fragment shader objects
     VertexShader vertex_shader{SHADER_PATHS[0]};
@@ -191,6 +149,7 @@ int main(int argc, char** argv)
 
     std::future_status setup_status_;
     bool listener_result;
+    window = frame.get();
     //render loop
     while (!glfwWindowShouldClose(window))
     {
