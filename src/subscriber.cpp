@@ -7,7 +7,9 @@
 #include <future>
 #include <mutex>
 #include <condition_variable>
-#include <glad/glad.h>
+extern "C" {
+    #include <glad/glad.h>
+}
 #include <GLFW/glfw3.h>
 #include <glm/glm.hpp>
 #include "mqtt/client.h"
@@ -156,7 +158,9 @@ int main(int argc, char** argv)
         glBindVertexArray(VAO);
         glUniform4f(vertexColorLocation, 0.0f, 1.0f, 0.5f, 1.0f);
         glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);  //take indices into a consideration here. because you have saved indices as EBO.        
-        
+       
+       
+       
         //rendering is shown on the display
         glfwSwapBuffers(window);
         glfwPollEvents();
