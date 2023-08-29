@@ -18,6 +18,7 @@ namespace gl{
             void setViewPort();
             static void framebuffer_size_callback(GLFWwindow* window, int width, int height);
             static void error_callback(int error, const char* description);
+            static void mouse_callback(GLFWwindow* window, double xpos, double ypos);
             static void processInput(GLFWwindow *window);
             GLFWwindow* get() const {return window;} 
 
@@ -25,7 +26,12 @@ namespace gl{
         private:
             uint height;
             uint width;
-            GLFWwindow* window;
+            GLFWwindow* window;        
+            static inline bool cursor_mode;    
+            static inline bool  firstMouse;
+            static inline float lastMouseX;
+            static inline float lastMouseY;
+            
     };
 }
 #endif
