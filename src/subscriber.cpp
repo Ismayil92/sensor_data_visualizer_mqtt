@@ -140,12 +140,14 @@ int main(int argc, char** argv)
     glm::mat4 view = glm::mat4(1.0f);
     view = glm::translate(view, glm::vec3(0.0f,0.0f,-3.0f));
     glm::mat4 projection;
-    projection = glm::perspective(glm::radians(30.0f), 800.0f/600.0f, 0.1f, 10.0f);
+    projection = glm::perspective(glm::radians(30.0f), 800.0f/600.0f, 0.1f, 100.0f);
+    
     //render loop
     while (!glfwWindowShouldClose(window))
     {
         //check the input key at each iteration
         frame.processInput(window);
+
         //check asynchronous mqtt communication
         setup_status_ = mqtt_receiver_setup.wait_for(1ms);
         if(setup_status_==std::future_status::ready){
@@ -161,7 +163,8 @@ int main(int argc, char** argv)
         int modelLoc = glGetUniformLocation(shader_program, "model");
         int viewLoc = glGetUniformLocation(shader_program, "view");
         int projectiionLoc = glGetUniformLocation(shader_program, "projection");
-
+        //recalculate view matrix 
+        view = frame.setCameraViewMatrix();
         //now we are activating newly created program object 
         glUseProgram(shader_program);
         glBindVertexArray(VAO);

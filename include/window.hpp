@@ -6,10 +6,10 @@ extern "C"{
 }
 #include <GLFW/glfw3.h>
 #include <string_view>
-
+#include "camera.hpp"
 
 namespace gl{
-    class Window{
+    class Window: public Camera{
         public:
             Window(GLFWwindow*, const uint,const uint, const std::string);
             ~Window();
