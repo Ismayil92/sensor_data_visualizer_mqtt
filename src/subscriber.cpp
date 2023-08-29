@@ -12,6 +12,9 @@ extern "C" {
 }
 #include <GLFW/glfw3.h>
 #include <glm/glm.hpp>
+#include <glm/glm.hpp>
+#include <glm/gtc/matrix_transform.hpp>
+#include <glm/gtc/type_ptr.hpp>
 #include "mqtt/client.h"
 #include "mqtt/topic.h"
 #include "shader.hpp"
@@ -35,15 +38,7 @@ const std::string SHADER_PATHS[2]{
 const int QOS{0};
 
 
-bool data_handler(const mqtt::message& msg)
-{
-    const auto now {std::chrono::system_clock::now()};
-    const auto t_c = std::chrono::system_clock::to_time_t(now);
-    std::cout<<std::ctime(&t_c)<<": "<<msg.to_string()<<std::endl;
-    return true;
-}
-
-
+bool data_handler(const mqtt::message& msg);
 bool setupMQTT(mqtt::client& cli);
 bool listen(mqtt::client& cli);
 
@@ -68,7 +63,7 @@ int main(int argc, char** argv)
     uint VAO; //vertex array object 
     uint EBO; //element buffer object
     
-    gl::Window frame{window, 480, 640, "subscriber_window"};
+    gl::Window frame{window, 600, 800, "subscriber_window"};
     
     //create Vertex and Fragment shader objects
     VertexShader vertex_shader{SHADER_PATHS[0]};
@@ -91,16 +86,20 @@ int main(int argc, char** argv)
         std::exit(EXIT_FAILURE);
     }   
 
+
     float vertices[] = {
         //positions             //colors
-        0.5f,  0.5f, 0.0f,      1.0f, 0.0f, 0.0f, // top right
-        0.5f, -0.5f, 0.0f,      0.0f, 1.0f, 0.0f, // bottom right
-        -0.5f, -0.5f, 0.0f,     0.0f, 0.0f, 1.0f,  // bottom left
-        -0.5f,  0.5f, 0.0f,     1.0f, 0.0f, 1.1f  // top left 
+        0.0f,  0.0f, 0.0f, 1.0f, 0.0f, 0.0f, // origin
+        0.0f,  0.0f, 0.0f, 0.0f, 1.0f, 0.0f, // origin
+        0.0f,  0.0f, 0.0f, 0.0f, 0.0f, 1.0f, // origin
+        0.0f, 0.5f, 0.0f, 1.0f, 0.0f, 0.0f, // x
+        0.5f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f,  // y
+        0.0f, 0.0f, 0.5f, 0.0f, 0.0f, 1.0f //z
     }; 
     uint indices[] = {
-        0, 1, 3, //first triangle 
-        1, 2, 3  //second triangle
+        0, 3, //first axis 
+        1, 4, //second axis
+        2, 5 //third axis
     };
 
 
@@ -130,11 +129,18 @@ int main(int argc, char** argv)
     //so color values starts from 4th element for each vertice.  
 
     glBindBuffer(GL_ARRAY_BUFFER, 0); //unbind VBO after glVertexAttribPointer function.
-    
-
+    glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
+    glEnable(GL_DEPTH_TEST); 
     std::future_status setup_status_;
     bool listener_result;
     window = frame.get();
+    
+    glm::mat4 model = glm::mat4(1.0f);
+    model = glm::rotate(model, glm::radians(-55.0f),glm::vec3(0.0f,1.0f,1.0f));
+    glm::mat4 view = glm::mat4(1.0f);
+    view = glm::translate(view, glm::vec3(0.0f,0.0f,-3.0f));
+    glm::mat4 projection;
+    projection = glm::perspective(glm::radians(30.0f), 800.0f/600.0f, 0.1f, 10.0f);
     //render loop
     while (!glfwWindowShouldClose(window))
     {
@@ -150,15 +156,23 @@ int main(int argc, char** argv)
         //from old frame will still hold on the viewport
         glClearColor(0.2f, 0.3f, 0.3f, 1.0f);
         //we specify which buffer we would like to clear
-        glClear(GL_COLOR_BUFFER_BIT);
-        //find uniform object location in shader_program
-        int vertexColorLocation = glGetUniformLocation(shader_program, "inputcolor");
+        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);        
+        
+        int modelLoc = glGetUniformLocation(shader_program, "model");
+        int viewLoc = glGetUniformLocation(shader_program, "view");
+        int projectiionLoc = glGetUniformLocation(shader_program, "projection");
+
         //now we are activating newly created program object 
-        glUseProgram(shader_program); 
+        glUseProgram(shader_program);
         glBindVertexArray(VAO);
-        glUniform4f(vertexColorLocation, 0.0f, 1.0f, 0.5f, 1.0f);
-        glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);  //take indices into a consideration here. because you have saved indices as EBO.        
-       
+        glUniformMatrix4fv(modelLoc, 1, GL_FALSE, glm::value_ptr(model));
+        glUniformMatrix4fv(viewLoc, 1, GL_FALSE, glm::value_ptr(view));
+        glUniformMatrix4fv(projectiionLoc, 1, GL_FALSE, glm::value_ptr(projection));
+        
+        glLineWidth(3);
+        glDrawElements(GL_LINES, 6, GL_UNSIGNED_INT, 0);  //take indices into a consideration here. because you have saved indices as EBO.        
+
+
        
        
         //rendering is shown on the display
@@ -174,6 +188,13 @@ int main(int argc, char** argv)
 
 }
 
+bool data_handler(const mqtt::message& msg)
+{
+    const auto now {std::chrono::system_clock::now()};
+    const auto t_c = std::chrono::system_clock::to_time_t(now);
+    std::cout<<std::ctime(&t_c)<<": "<<msg.to_string()<<std::endl;
+    return true;
+}
 
 bool setupMQTT(mqtt::client& cli)
 {
