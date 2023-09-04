@@ -12,7 +12,7 @@ extern "C" {
     #include <glad/glad.h>
 }
 #include <GLFW/glfw3.h>
-#define GLM_FORCE_CXX17
+#define GLM_FORCE_CXX20
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/type_ptr.hpp>
@@ -20,49 +20,41 @@ extern "C" {
 #include "mqtt/topic.h"
 #include "shader.hpp"
 #include "window.hpp"
+#include "listener.hpp"
 
-
-static std::mutex mx;
-static std::condition_variable cv;
-static bool ready;
 
 using namespace std::chrono_literals;
 
 const std::string SERVER_ADDRESS{"tcp://localhost:1883"};
 const std::string CLIENT_ID{"sensor_listener"};
 const std::string TOPIC_NAME{"coords"};
+const uint8_t QOS{0};
 
 const std::string SHADER_PATHS[2]{
                                     "../shaders/vertex.txt", //vertex shader
                                     "../shaders/fragment.txt" //fragment shader
                                 };
 
-const int QOS{0};
-
-
-bool data_handler(const mqtt::message& msg, glm::vec3& angles);
-bool setupMQTT(mqtt::client& cli);
-bool listen(mqtt::client& cli, glm::vec3& view_angles);
-glm::vec3 decodeBuffer(const char* str_);
-
-
 int main(int argc, char** argv)
 {
 
     glm::vec3 view_angles;
-    //create mqtt client object
-    mqtt::client cli(SERVER_ADDRESS, CLIENT_ID, 
-                    mqtt::create_options(MQTTVERSION_5));
+    //configure MQTTListener instance
+    MQTTListener mqtt_client{SERVER_ADDRESS,
+                            CLIENT_ID,
+                            TOPIC_NAME,
+                            QOS};
+
 
     //declare a future object related to MQTT communication
-    std::future<bool> mqtt_receiver_listen{std::async(std::launch::async, 
-                                                    listen,
-                                                    std::ref(cli),
-                                                    std::ref(view_angles)
-                                            )};
+    std::future<bool> mqtt_receiver_listen{std::async(std::launch::async,  
+                                                    &MQTTListener::listen,
+                                                    &mqtt_client,
+                                                    std::ref(view_angles))};
 
     std::future<bool> mqtt_receiver_setup{std::async(std::launch::async,
-                    setupMQTT, std::ref(cli))};
+                                                    &MQTTListener::setupMQTT,
+                                                    &mqtt_client)};
 
     
 
@@ -199,117 +191,4 @@ int main(int argc, char** argv)
     return 0;
 
 }
-
-
-
-glm::vec3 decodeBuffer(const char* str_)
-{    
-    std::stringstream ss(str_);
-    std::string value_str;
-    char delimiter{','}; 
-    std::vector<float> vec;
-    while(!ss.eof())
-    {
-       getline(ss, value_str, delimiter);
-       vec.push_back(stof(value_str));       
-    }
-    return glm::vec3(vec[0],
-                    vec[1],
-                    vec[2]);   
-
-}
-
-bool data_handler(const mqtt::message& msg, glm::vec3& angles)
-{
-    const auto now {std::chrono::system_clock::now()};
-    const auto t_c = std::chrono::system_clock::to_time_t(now);
-    mqtt::binary payload = msg.get_payload();
-    if(payload.empty()) 
-    {
-      return false;      
-    } 
-
-    const char* input = payload.c_str();
-    angles = decodeBuffer(input);
-    std::cout<<std::ctime(&t_c)<<angles[0]<<","<<
-                                angles[1]<<","<<
-                                angles[2]<<std::endl; 
-    
-    return true;
-}
-
-
-
-
-bool setupMQTT(mqtt::client& cli)
-{
-    std::unique_lock<std::mutex> lc_{mx};
-
-    std::cout<<"MQTT Subscriber Client connecting to the MQTT server!!!\n";
-
-    auto connOpts = mqtt::connect_options_builder()
-        .keep_alive_interval(20s)
-        .automatic_reconnect(2s, 30s)
-        .clean_session(false)
-        .finalize();
-
-    mqtt::connect_response rsp {cli.connect(connOpts)};
-        
-    if(!rsp.is_session_present()){
-        std::cout<<"Subscribing to topics\n";
-            
-        cli.subscribe(TOPIC_NAME, QOS);
-        std::cout<<"OK\n";
-    }
-    else
-    {
-        std::cout<<"Session already established!!!\n";
-    }
-    lc_.unlock();   
-    cv.notify_one();
-    ready = true;          
-    return ready;
-}
-
-bool listen(mqtt::client& cli, glm::vec3& view_angles)
-{
-    try
-    {   
-        std::cout<<"MQTT Listener started running\n"<<std::endl;  
-        while(true)
-        {
-            std::unique_lock<std::mutex> lc_{mx};          
-            cv.wait(lc_, [&](){return ready;});
-            auto msg = cli.consume_message();
-            if(msg)            
-            {                
-                if(!data_handler(*msg, view_angles))
-                {
-                    throw std::runtime_error("Payload is empty!!!\n");
-                }                
-            }
-            else if(!cli.is_connected()){
-                std::cout<<"Lost connection\n";
-                while(!cli.is_connected())
-                {
-                    std::this_thread::sleep_for(250ms);
-                }
-                std::cout<<"Re-established connection\n";
-            }
-            lc_.unlock();
-        }
-
-        // disconnect the connection 
-        std::cout<<"Disconnection from the MQTT server...\n";
-        cli.disconnect();
-        std::cout<<"Connection closed!!!\n";
-    }
-    catch(const mqtt::exception& e)
-    {
-        std::cerr << e.what() << '\n';
-        std::exit(EXIT_FAILURE);
-    }
-    return true;
-}
-
 
