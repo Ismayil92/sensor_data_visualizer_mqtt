@@ -21,14 +21,11 @@ extern "C" {
 #include "shader.hpp"
 #include "window.hpp"
 #include "listener.hpp"
+#include "parser.hpp"
 
 
 using namespace std::chrono_literals;
 
-const std::string SERVER_ADDRESS{"tcp://localhost:1883"};
-const std::string CLIENT_ID{"sensor_listener"};
-const std::string TOPIC_NAME{"coords"};
-const uint8_t QOS{0};
 
 const std::string SHADER_PATHS[2]{
                                     "../shaders/vertex.txt", //vertex shader
@@ -38,12 +35,16 @@ const std::string SHADER_PATHS[2]{
 int main(int argc, char** argv)
 {
 
+    ArgParser* parser = ArgParser::GetInstance();    
+    parser->parse(argc, argv);
+    parser->help();
+
     glm::vec3 view_angles;
     //configure MQTTListener instance
-    MQTTListener mqtt_client{SERVER_ADDRESS,
-                            CLIENT_ID,
-                            TOPIC_NAME,
-                            QOS};
+    MQTTListener mqtt_client{parser->getServer(),
+                            parser->getClientID(),
+                            parser->getTopic(),
+                            parser->getQualityLevel()};
 
 
     //declare a future object related to MQTT communication
@@ -161,11 +162,13 @@ int main(int argc, char** argv)
         //we specify which buffer we would like to clear
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);        
         
+        view = glm::rotate(view, glm::radians(view_angles.y),glm::vec3(0.0f,1.0f,0.0f));
+
         int modelLoc = glGetUniformLocation(shader_program, "model");
         int viewLoc = glGetUniformLocation(shader_program, "view");
         int projectiionLoc = glGetUniformLocation(shader_program, "projection");
         //recalculate view matrix 
-        view = frame.setCameraViewMatrix();
+        //view = frame.setCameraViewMatrix();
         //now we are activating newly created program object 
         glUseProgram(shader_program);
         glBindVertexArray(VAO);
@@ -182,6 +185,7 @@ int main(int argc, char** argv)
         //rendering is shown on the display
         glfwSwapBuffers(window);
         glfwPollEvents();
+        std::this_thread::sleep_for(100ms);
     }
        
     //now we can delete shader program after linking them to program object    

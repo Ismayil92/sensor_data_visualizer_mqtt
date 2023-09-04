@@ -36,8 +36,8 @@ Window::Window(GLFWwindow* window_, const uint height_, const uint width_, const
     firstMouse = true;
     cursor_mode = true;
     //set mouse cursor mode and its callback
-    glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_NORMAL);
-    glfwSetCursorPosCallback(window, Window::mouse_callback);
+    //glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_NORMAL);
+    //glfwSetCursorPosCallback(window, Window::mouse_callback);
 
 }
 

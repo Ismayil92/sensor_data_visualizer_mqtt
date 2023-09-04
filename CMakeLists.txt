@@ -31,6 +31,7 @@ set(OpenCV_INCLUDE_DIR {OpenCV_INCLUDE_DIRS/opencv2})
 add_executable(${PROJECT_NAME}_mqtt_subscriber src/subscriber.cpp src/shader.cpp src/window.cpp src/listener.cpp)
 target_include_directories(${PROJECT_NAME}_mqtt_subscriber PRIVATE 
     include 
+    /usr/local/include
     ${PahoMqttCpp_INCLUDE_DIRS}
     ${OpenSSL_INCLUDE_DIR}
     ${GLUT_INCLUDE_DIRS}
