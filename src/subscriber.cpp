@@ -3,6 +3,7 @@
 #include <exception>
 #include <chrono>
 #include <vector>
+#include <algorithm>
 #include <cstdlib>
 #include <future>
 #include <mutex>
@@ -11,7 +12,7 @@ extern "C" {
     #include <glad/glad.h>
 }
 #include <GLFW/glfw3.h>
-#include <glm/glm.hpp>
+#define GLM_FORCE_CXX17
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/type_ptr.hpp>
@@ -19,6 +20,7 @@ extern "C" {
 #include "mqtt/topic.h"
 #include "shader.hpp"
 #include "window.hpp"
+
 
 static std::mutex mx;
 static std::condition_variable cv;
@@ -38,20 +40,27 @@ const std::string SHADER_PATHS[2]{
 const int QOS{0};
 
 
-bool data_handler(const mqtt::message& msg);
+bool data_handler(const mqtt::message& msg, glm::vec3& angles);
 bool setupMQTT(mqtt::client& cli);
-bool listen(mqtt::client& cli);
+bool listen(mqtt::client& cli, glm::vec3& view_angles);
+glm::vec3 decodeBuffer(const char* str_);
 
 
 int main(int argc, char** argv)
 {
+
+    glm::vec3 view_angles;
     //create mqtt client object
     mqtt::client cli(SERVER_ADDRESS, CLIENT_ID, 
                     mqtt::create_options(MQTTVERSION_5));
 
     //declare a future object related to MQTT communication
     std::future<bool> mqtt_receiver_listen{std::async(std::launch::async, 
-                    listen, std::ref(cli))};
+                                                    listen,
+                                                    std::ref(cli),
+                                                    std::ref(view_angles)
+                                            )};
+
     std::future<bool> mqtt_receiver_setup{std::async(std::launch::async,
                     setupMQTT, std::ref(cli))};
 
@@ -172,11 +181,11 @@ int main(int argc, char** argv)
         glUniformMatrix4fv(viewLoc, 1, GL_FALSE, glm::value_ptr(view));
         glUniformMatrix4fv(projectiionLoc, 1, GL_FALSE, glm::value_ptr(projection));
         
+
+        //draw axis lines
         glLineWidth(3);
         glDrawElements(GL_LINES, 6, GL_UNSIGNED_INT, 0);  //take indices into a consideration here. because you have saved indices as EBO.        
 
-
-       
        
         //rendering is shown on the display
         glfwSwapBuffers(window);
@@ -191,13 +200,46 @@ int main(int argc, char** argv)
 
 }
 
-bool data_handler(const mqtt::message& msg)
+
+
+glm::vec3 decodeBuffer(const char* str_)
+{    
+    std::stringstream ss(str_);
+    std::string value_str;
+    char delimiter{','}; 
+    std::vector<float> vec;
+    while(!ss.eof())
+    {
+       getline(ss, value_str, delimiter);
+       vec.push_back(stof(value_str));       
+    }
+    return glm::vec3(vec[0],
+                    vec[1],
+                    vec[2]);   
+
+}
+
+bool data_handler(const mqtt::message& msg, glm::vec3& angles)
 {
     const auto now {std::chrono::system_clock::now()};
     const auto t_c = std::chrono::system_clock::to_time_t(now);
-    std::cout<<std::ctime(&t_c)<<": "<<msg.to_string()<<std::endl;
+    mqtt::binary payload = msg.get_payload();
+    if(payload.empty()) 
+    {
+      return false;      
+    } 
+
+    const char* input = payload.c_str();
+    angles = decodeBuffer(input);
+    std::cout<<std::ctime(&t_c)<<angles[0]<<","<<
+                                angles[1]<<","<<
+                                angles[2]<<std::endl; 
+    
     return true;
 }
+
+
+
 
 bool setupMQTT(mqtt::client& cli)
 {
@@ -229,7 +271,7 @@ bool setupMQTT(mqtt::client& cli)
     return ready;
 }
 
-bool listen(mqtt::client& cli)
+bool listen(mqtt::client& cli, glm::vec3& view_angles)
 {
     try
     {   
@@ -240,13 +282,11 @@ bool listen(mqtt::client& cli)
             cv.wait(lc_, [&](){return ready;});
             auto msg = cli.consume_message();
             if(msg)            
-            {           
-                
-                if(!data_handler(*msg))
+            {                
+                if(!data_handler(*msg, view_angles))
                 {
-                    break;
-                }
-                
+                    throw std::runtime_error("Payload is empty!!!\n");
+                }                
             }
             else if(!cli.is_connected()){
                 std::cout<<"Lost connection\n";
@@ -271,3 +311,5 @@ bool listen(mqtt::client& cli)
     }
     return true;
 }
+
+
