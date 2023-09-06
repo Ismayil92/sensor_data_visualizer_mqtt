@@ -27,6 +27,8 @@ class MQTTListener{
         const std::string server_address;
         std::string topic_name;
         mqtt::client cli;
+        mqtt::connect_options connOpts;
+    
     public:
         MQTTListener(const std::string _address,
                     const std::string _client_id,

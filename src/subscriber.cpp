@@ -48,14 +48,15 @@ int main(int argc, char** argv)
 
 
     //declare a future object related to MQTT communication
-    std::future<bool> mqtt_receiver_listen{std::async(std::launch::async,  
-                                                    &MQTTListener::listen,
-                                                    &mqtt_client,
-                                                    std::ref(view_angles))};
 
     std::future<bool> mqtt_receiver_setup{std::async(std::launch::async,
                                                     &MQTTListener::setupMQTT,
                                                     &mqtt_client)};
+
+    std::future<bool> mqtt_receiver_listen{std::async(std::launch::async,  
+                                                    &MQTTListener::listen,
+                                                    &mqtt_client,
+                                                    std::ref(view_angles))};                                    
 
     
 
@@ -153,6 +154,7 @@ int main(int argc, char** argv)
         //check asynchronous mqtt communication
         setup_status_ = mqtt_receiver_setup.wait_for(1ms);
         if(setup_status_==std::future_status::ready){
+            
         }
         setup_status_ = mqtt_receiver_listen.wait_for(1ms);
         //rendering commands 
@@ -185,7 +187,7 @@ int main(int argc, char** argv)
         //rendering is shown on the display
         glfwSwapBuffers(window);
         glfwPollEvents();
-        std::this_thread::sleep_for(100ms);
+        std::this_thread::sleep_for(10ms);
     }
        
     //now we can delete shader program after linking them to program object    

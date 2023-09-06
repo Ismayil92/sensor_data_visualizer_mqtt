@@ -1,5 +1,5 @@
 #include "listener.hpp"
-
+#include <exception>
 
 
 MQTTListener::MQTTListener(const std::string _address,
@@ -9,7 +9,8 @@ MQTTListener::MQTTListener(const std::string _address,
                                         client_id{_client_id},
                                         topic_name{_topic_name},
                                         QOS{_qos},
-                                        cli{mqtt::client(server_address, 
+                                        cli{
+                                            mqtt::client(server_address, 
                                                         client_id,
                                                         mqtt::create_options(MQTTVERSION_5))
                                         }
@@ -28,15 +29,18 @@ MQTTListener::~MQTTListener()
 bool MQTTListener::setupMQTT()
 {
     std::unique_lock<std::mutex> lc_{mx};
-    std::cout<<"MQTT Subscriber client connecting to the MQTT server\n";
+    std::cout<<"MQTTListener client connecting to the MQTT server\n";
 
-    auto connOpts = mqtt::connect_options_builder()
+    connOpts = mqtt::connect_options_builder()
                             .keep_alive_interval(20s)
                             .automatic_reconnect(2s, 30s)
-                            .clean_session(false)
+                            .clean_session(true)
                             .finalize();
 
+
+    
     mqtt::connect_response rsp{cli.connect(connOpts)};
+    
     if(!rsp.is_session_present()){
         std::cout<<"Subscribing to topics\n";            
         cli.subscribe(topic_name, QOS);
@@ -55,21 +59,23 @@ bool MQTTListener::setupMQTT()
 bool MQTTListener::listen(glm::vec3& view_angles)
 {
     try
-    {   
-        std::cout<<"MQTTListener::listen() started running\n"<<std::endl;  
+    {     
         while(true)
         {
             std::unique_lock<std::mutex> lc_{mx};          
             cv.wait(lc_, [&](){return ready;});
+
             auto msg = cli.consume_message();
+
             if(msg)            
-            {                
+            {               
                 if(!data_handler(*msg, view_angles))
                 {
                     throw std::runtime_error("Payload is empty!!!\n");
                 }                
             }
-            else if(!cli.is_connected()){
+            else if(!cli.is_connected())
+            {
                 std::cout<<"Lost connection\n";
                 while(!cli.is_connected())
                 {
@@ -77,6 +83,7 @@ bool MQTTListener::listen(glm::vec3& view_angles)
                 }
                 std::cout<<"Re-established connection\n";
             }
+            std::cout<<"----------------------------------\n";
             lc_.unlock();
         }
 
@@ -95,35 +102,48 @@ bool MQTTListener::listen(glm::vec3& view_angles)
 
 glm::vec3 MQTTListener::decodeBuffer(const char* _str)
 {
+    std::vector<float> vec;   
     std::stringstream ss(_str);
     std::string value_str;
-    char delimiter{','}; 
-    std::vector<float> vec;
+    char delimiter{','};     
     while(!ss.eof())
     {
-       getline(ss, value_str, delimiter);
-       vec.push_back(stof(value_str));       
+        getline(ss, value_str, delimiter);
+        vec.push_back(stof(value_str));       
     }
+    
     return glm::vec3(vec[0],
-                    vec[1],
-                    vec[2]);
+                        vec[1],
+                        vec[2]);
 }
 
 bool MQTTListener::data_handler(const mqtt::message& msg, glm::vec3& angles)
 {
     const auto now {std::chrono::system_clock::now()};
     const auto t_c = std::chrono::system_clock::to_time_t(now);
+
     mqtt::binary payload = msg.get_payload();
+    
     if(payload.empty()) 
     {
+      std::cerr<<"MQTTListener::data_handler: Payload is empty.\n";
       return false;      
     } 
 
     const char* input = payload.c_str();
-    angles = decodeBuffer(input);
-    std::cout<<std::ctime(&t_c)<<angles[0]<<","<<
+    
+    try
+    {
+        angles = decodeBuffer(input);
+        std::cout<<std::ctime(&t_c)<<angles[0]<<","<<
                                 angles[1]<<","<<
-                                angles[2]<<std::endl; 
+                                angles[2]<<std::endl;
+    }
+    catch(const std::exception e)    
+    {
+       std::cerr<<"MQTTListener::data_handler(): Input is not suitable for the vector format!!!\n";
+    }
+ 
     
     return true;
 }
