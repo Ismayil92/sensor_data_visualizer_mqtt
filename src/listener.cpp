@@ -13,17 +13,15 @@ MQTTListener::MQTTListener(const std::string _address,
                                         cli{
                                             mqtt::client(server_address, 
                                                         client_id,
-                                                        mqtt::create_options(MQTTVERSION_5))
-                                        }
+                                                        mqtt::create_options(MQTTVERSION_5))}
 {            
     spdlog::info("MQTTListener instance created successfully!");
 }
 
 
 MQTTListener::~MQTTListener()
-{
-
-
+{   
+    spdlog::info("MQTTListener instance deleted successfully!");
 }
 
 
@@ -37,8 +35,6 @@ bool MQTTListener::setupMQTT()
                             .automatic_reconnect(2s, 30s)
                             .clean_session(true)
                             .finalize();
-
-
     
     mqtt::connect_response rsp{cli.connect(connOpts)};
     
@@ -72,7 +68,7 @@ bool MQTTListener::listen(glm::vec3& view_angles)
             {               
                 if(!data_handler(*msg, view_angles))
                 {
-                    throw std::runtime_error("Payload is empty!!!\n");
+                    throw std::runtime_error("MQTTListener::listen: Payload is empty!!!\n");
                 }                
             }
             else if(!cli.is_connected())
@@ -88,13 +84,14 @@ bool MQTTListener::listen(glm::vec3& view_angles)
         }
 
         // disconnect the connection 
-        spdlog::info("Disconnection from the MQTT server...");
+        spdlog::warn("Disconnection from the MQTT server...");
         cli.disconnect();
         spdlog::info("Connection closed!");
     }
     catch(const mqtt::exception& e)
     {
-        std::cerr << e.what() << '\n';
+        spdlog::error("MQTTListener::listen: Error: {}:[{}]",
+                     e.what(), e.get_reason_code());
         std::exit(EXIT_FAILURE);
     }
     return true;
