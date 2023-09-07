@@ -1,4 +1,5 @@
 #include "listener.hpp"
+#include "spdlog/spdlog.h"
 #include <exception>
 
 
@@ -15,7 +16,7 @@ MQTTListener::MQTTListener(const std::string _address,
                                                         mqtt::create_options(MQTTVERSION_5))
                                         }
 {            
-    std::cout<<"MQTTListener instance created successfully!!!\n";
+    spdlog::info("MQTTListener instance created successfully!");
 }
 
 
@@ -29,7 +30,7 @@ MQTTListener::~MQTTListener()
 bool MQTTListener::setupMQTT()
 {
     std::unique_lock<std::mutex> lc_{mx};
-    std::cout<<"MQTTListener client connecting to the MQTT server\n";
+    spdlog::info("MQTTListener client connecting to the MQTT server!");
 
     connOpts = mqtt::connect_options_builder()
                             .keep_alive_interval(20s)
@@ -42,13 +43,13 @@ bool MQTTListener::setupMQTT()
     mqtt::connect_response rsp{cli.connect(connOpts)};
     
     if(!rsp.is_session_present()){
-        std::cout<<"Subscribing to topics\n";            
+        spdlog::info("Subscribing to topics...");            
         cli.subscribe(topic_name, QOS);
-        std::cout<<"OK\n";
+        spdlog::info("OK");
     }
     else
     {
-        std::cout<<"Session already established!!!\n";
+        spdlog::warn("Session already established!");
     }
     lc_.unlock();   
     cv.notify_one();
@@ -76,21 +77,20 @@ bool MQTTListener::listen(glm::vec3& view_angles)
             }
             else if(!cli.is_connected())
             {
-                std::cout<<"Lost connection\n";
+                spdlog::critical("MQTTListener::listen: Lost connection...");
                 while(!cli.is_connected())
                 {
                     std::this_thread::sleep_for(250ms);
                 }
-                std::cout<<"Re-established connection\n";
+                spdlog::info("Re-established connection!");
             }
-            std::cout<<"----------------------------------\n";
             lc_.unlock();
         }
 
         // disconnect the connection 
-        std::cout<<"Disconnection from the MQTT server...\n";
+        spdlog::info("Disconnection from the MQTT server...");
         cli.disconnect();
-        std::cout<<"Connection closed!!!\n";
+        spdlog::info("Connection closed!");
     }
     catch(const mqtt::exception& e)
     {
@@ -126,7 +126,7 @@ bool MQTTListener::data_handler(const mqtt::message& msg, glm::vec3& angles)
     
     if(payload.empty()) 
     {
-      std::cerr<<"MQTTListener::data_handler: Payload is empty.\n";
+      spdlog::error("MQTTListener::data_handler: Payload is empty!");
       return false;      
     } 
 
@@ -135,13 +135,14 @@ bool MQTTListener::data_handler(const mqtt::message& msg, glm::vec3& angles)
     try
     {
         angles = decodeBuffer(input);
-        std::cout<<std::ctime(&t_c)<<angles[0]<<","<<
-                                angles[1]<<","<<
-                                angles[2]<<std::endl;
+        spdlog::info("INPUT: {},{},{}", angles[0],
+                                        angles[1],
+                                        angles[2]);
+        
     }
     catch(const std::exception e)    
     {
-       std::cerr<<"MQTTListener::data_handler(): Input is not suitable for the vector format!!!\n";
+       spdlog::error("MQTTListener::data_handler: Input is not suitable for the vector format!");
     }
  
     

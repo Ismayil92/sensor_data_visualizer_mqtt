@@ -1,5 +1,5 @@
 #include "shader.hpp"
-
+#include "spdlog/spdlog.h"
 
 BaseShader::BaseShader(const std::string shader_path,
                         SHADER_STAGE shader_)
@@ -22,16 +22,14 @@ BaseShader::BaseShader(const std::string shader_path,
         code = shader_stream.str();
         if(!code.empty())
         {
-            std::cout<<"SHADER::"<<
-                        ((shader_==VERTEX_SHADER)?"VERTEX_SHADER":"FRAGMENT_SHADER")<<
-                        "_FILE_SUCCESSFULLY_READ\n";
+            spdlog::info("SHADER::{}_FILE_SUCCESSFULLY_READ!",
+                         ((shader_==VERTEX_SHADER)?"VERTEX_SHADER":"FRAGMENT_SHADER"));
         }
     }
     catch(const std::ifstream::failure& e)
     {
-        std::cerr << "ERROR::"<<
-                    ((shader_==VERTEX_SHADER)?"VERTEX_SHADER":"FRAGMENT_SHADER")<<
-                    "_FILE_NOT_READ\n";
+        spdlog::error("SHADER::{}_FILE_NOT_READ!", 
+                    ((shader_==VERTEX_SHADER)?"VERTEX_SHADER":"FRAGMENT_SHADER"));
     } 
 }
 
@@ -45,7 +43,7 @@ BaseShader::~BaseShader()
 VertexShader::VertexShader(const std::string vertex_path):
                                 BaseShader{vertex_path, VERTEX_SHADER}
 {
-    std::cout<<"Vertex Shader constructor created!!!\n";
+    spdlog::info("VertexShader object created successfully..");
 }
 
 VertexShader::~VertexShader()
@@ -64,7 +62,7 @@ bool VertexShader::compile()
     if(!success)
     {
         glGetShaderInfoLog(shader, 512, NULL, infoLog);
-        std::cout<<"ERROR::SHADER::VERTEX::COMPILATION_FAILED\n"<<infoLog<<std::endl;
+        spdlog::critical("VertexShader::compile: Compilation failed with the LOG:\n {}!",infoLog);
         return false;
     }     
     return true;   
@@ -90,7 +88,7 @@ void VertexShader::setFloat(const uint& ID, const std::string& name, float value
 FragmentShader::FragmentShader(const std::string fragment_path):
                                     BaseShader{fragment_path, FRAGMENT_SHADER}
 {
-    std::cout<<"Fragment Shader constructor created!!!\n";
+    spdlog::info("FragmentShader object created successfully..");
 }
 
 FragmentShader::~FragmentShader()
@@ -107,7 +105,7 @@ bool FragmentShader::compile()
     if(!success)
     {
         glGetShaderInfoLog(shader, 512, NULL, infoLog);
-        std::cout<<"ERROR::SHADER::FRAGMENT::COMPILATION_FAILED\n"<<infoLog<<std::endl;
+        spdlog::critical("FragmentShader::compile: Compilation failed with the LOG:\n {}!",infoLog);
         return false;
     }
     return true;

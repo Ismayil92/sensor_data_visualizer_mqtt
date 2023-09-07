@@ -1,7 +1,7 @@
 #include <cstdlib>
 #include <iostream>
 #include "window.hpp"
-
+#include "spdlog/spdlog.h"
 using namespace gl;
 
 
@@ -22,7 +22,7 @@ Window::Window(GLFWwindow* window_, const uint height_, const uint width_, const
     //load all HW and system specific GL functions
     if(!gladLoadGLLoader((GLADloadproc)glfwGetProcAddress))
     {
-        std::cerr<<"Failed to initialize GLAD\n";
+        spdlog::critical("Failed to initialize GLAD!");
         std::exit(EXIT_FAILURE);
     }
     this->setViewPort();
@@ -51,10 +51,10 @@ void Window::init()
     // initialize GLFW
     if (!glfwInit())
     {
-        std::cerr<<"GLFW failed to initialize!!!\n";
+        spdlog::error("Window::init: GLFW failed to initialize!");
         return std::exit(EXIT_FAILURE);
     }    
-    std::cout<<"GL initialized successfully!!!\n";
+    spdlog::info("GL initialized successfully...");
 }
 
 
@@ -63,11 +63,11 @@ void Window::createWindow(const std::string window_name)
     window = glfwCreateWindow(width, height, window_name.c_str(), NULL, NULL);
     if(!window)
     {
-        std::cerr<<"Window or OpenGL context creation failed\n";
+        spdlog::critical("Window::createWindow: Window or OpenGL context creation failed!");
         glfwTerminate();
         std::exit(EXIT_FAILURE);
     }
-    std::cout<<"Window:\""<<window_name<<"\" created successfully!!!\n";
+    spdlog::info("Window: {} created successfully...", window_name);
 }
 
 void Window::setViewPort()
@@ -124,7 +124,7 @@ void Window::processInput(GLFWwindow *window)
     if(glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS)
     {
         glfwSetWindowShouldClose(window, true);
-        std::cout<<"Exit button pressed!!!\n";
+        spdlog::warn("Exit button pressed...");
         std::exit(EXIT_SUCCESS);
     }
     

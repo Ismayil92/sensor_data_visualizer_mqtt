@@ -18,6 +18,7 @@ extern "C" {
 #include <glm/gtc/type_ptr.hpp>
 #include "mqtt/client.h"
 #include "mqtt/topic.h"
+#include "spdlog/spdlog.h"
 #include "shader.hpp"
 #include "window.hpp"
 #include "listener.hpp"
@@ -26,11 +27,33 @@ extern "C" {
 
 using namespace std::chrono_literals;
 
+static float vertices[] = {
+        //positions             //colors
+        0.0f,  0.0f, 0.0f, 1.0f, 0.0f, 0.0f, // origin
+        0.0f,  0.0f, 0.0f, 0.0f, 1.0f, 0.0f, // origin
+        0.0f,  0.0f, 0.0f, 0.0f, 0.0f, 1.0f, // origin
+        0.0f, 0.5f, 0.0f, 1.0f, 0.0f, 0.0f, // x
+        0.5f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f,  // y
+        0.0f, 0.0f, 0.5f, 0.0f, 0.0f, 1.0f //z
+}; 
+    
+static uint indices[] = {
+        0, 3, //first axis 
+        1, 4, //second axis
+        2, 5 //third axis
+};
+
 
 const std::string SHADER_PATHS[2]{
                                     "../shaders/vertex.txt", //vertex shader
                                     "../shaders/fragment.txt" //fragment shader
                                 };
+
+
+void glSetup(uint& VAO, uint& VBO, uint &EBO, 
+            float* vertices, uint* indices,
+            uint vertice_size, uint indice_size);
+
 
 int main(int argc, char** argv)
 {
@@ -79,63 +102,24 @@ int main(int argc, char** argv)
     glAttachShader(shader_program, vertex_shader.get());
     glAttachShader(shader_program, fragment_shader.get());
     glLinkProgram(shader_program);
+
     int shader_program_success;
     char infoLog[512];
     glGetProgramiv(shader_program,GL_LINK_STATUS, &shader_program_success);
     if(!shader_program_success)
     {
         glGetProgramInfoLog(shader_program, 512, NULL, infoLog);
-        std::cerr<<"The program could not link to the shaders!!!\n";
+        spdlog::error("The Program could not link to the shaders.");
+        //std::cerr<<"The program could not link to the shaders!!!\n";
         std::exit(EXIT_FAILURE);
     }   
 
-
-    float vertices[] = {
-        //positions             //colors
-        0.0f,  0.0f, 0.0f, 1.0f, 0.0f, 0.0f, // origin
-        0.0f,  0.0f, 0.0f, 0.0f, 1.0f, 0.0f, // origin
-        0.0f,  0.0f, 0.0f, 0.0f, 0.0f, 1.0f, // origin
-        0.0f, 0.5f, 0.0f, 1.0f, 0.0f, 0.0f, // x
-        0.5f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f,  // y
-        0.0f, 0.0f, 0.5f, 0.0f, 0.0f, 1.0f //z
-    }; 
-    uint indices[] = {
-        0, 3, //first axis 
-        1, 4, //second axis
-        2, 5 //third axis
-    };
+    glSetup(VAO, VBO, EBO, vertices, indices, sizeof(vertices), sizeof(indices));
 
 
-    //generate VAO object and bind it first of all
-    glGenVertexArrays(1, &VAO);
-    glBindVertexArray(VAO);
-   
-    //create element buffer object EBO
-    glGenBuffers(1, &EBO);
-    glGenBuffers(1, &VBO);
-    //then bind and set EBO and VBOs
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, EBO);
-    glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(indices), indices, GL_STATIC_DRAW);
-    
-    glBindBuffer(GL_ARRAY_BUFFER, VBO);
-    glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), vertices, GL_STATIC_DRAW);
-    //we have to specify how OpenGL should interpret vertex data.
-    //it stores vertex data attributes including vertex buffer array in VAO object currently bound.
-    //describe how an element as a vertice should seem
-    //position attribute
-    glVertexAttribPointer(0,3,GL_FLOAT,GL_FALSE,6*sizeof(float),(void*)0);    
-    glEnableVertexAttribArray(0); //enable vertex position attribute array- arg is an attribute index
-    //color attribute
-    glVertexAttribPointer(1,3,GL_FLOAT,GL_FALSE,6*sizeof(float),(void*)(3*sizeof(float))); //last arg is an offset
-    glEnableVertexAttribArray(1); //enable vertex position attribute array- arg is an attribute index
-    //offset above become 3*sizeof(float) because for each vertice, first 3 elements are position values. 
-    //so color values starts from 4th element for each vertice.  
-
-    glBindBuffer(GL_ARRAY_BUFFER, 0); //unbind VBO after glVertexAttribPointer function.
-    glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
-    glEnable(GL_DEPTH_TEST); 
     std::future_status setup_status_;
-    bool listener_result;
+    bool listener_result;   
+    
     window = frame.get();
     
     glm::mat4 model = glm::mat4(1.0f);
@@ -198,3 +182,38 @@ int main(int argc, char** argv)
 
 }
 
+
+
+void glSetup(uint& VAO, uint& VBO, uint &EBO, 
+            float* vertices, uint* indices,
+            uint vertice_size, uint indice_size)
+{
+    //generate VAO object and bind it first of all
+    glGenVertexArrays(1, &VAO);
+    glBindVertexArray(VAO);
+   
+    //create element buffer object EBO
+    glGenBuffers(1, &EBO);
+    glGenBuffers(1, &VBO);
+    //then bind and set EBO and VBOs
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, EBO);
+    glBufferData(GL_ELEMENT_ARRAY_BUFFER, indice_size, indices, GL_STATIC_DRAW);
+    
+    glBindBuffer(GL_ARRAY_BUFFER, VBO);
+    glBufferData(GL_ARRAY_BUFFER, vertice_size, vertices, GL_STATIC_DRAW);
+    //we have to specify how OpenGL should interpret vertex data.
+    //it stores vertex data attributes including vertex buffer array in VAO object currently bound.
+    //describe how an element as a vertice should seem
+    //position attribute
+    glVertexAttribPointer(0,3,GL_FLOAT,GL_FALSE,6*sizeof(float),(void*)0);    
+    glEnableVertexAttribArray(0); //enable vertex position attribute array- arg is an attribute index
+    //color attribute
+    glVertexAttribPointer(1,3,GL_FLOAT,GL_FALSE,6*sizeof(float),(void*)(3*sizeof(float))); //last arg is an offset
+    glEnableVertexAttribArray(1); //enable vertex position attribute array- arg is an attribute index
+    //offset above become 3*sizeof(float) because for each vertice, first 3 elements are position values. 
+    //so color values starts from 4th element for each vertice.  
+
+    glBindBuffer(GL_ARRAY_BUFFER, 0); //unbind VBO after glVertexAttribPointer function.
+    glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
+    glEnable(GL_DEPTH_TEST); 
+}
